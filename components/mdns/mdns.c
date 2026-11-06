@@ -162,6 +162,13 @@ static const char * _mdns_get_service_instance_name(mdns_service_t * service)
     return NULL;
 }
 
+/* Compression pointers may form a chain (each name points at the previous
+ * record's name) that recurses once per element. Every frame is 64 bytes and
+ * the mDNS service task stack is 4096 bytes, so an unbounded chain overruns
+ * the stack into the heap. 48 levels use ~720 bytes of the ~2360-byte budget
+ * and are beyond anything a real responder emits. */
+#define MDNS_MAX_FQDN_DEPTH 48
+
 /**
  * @brief  reads MDNS FQDN into mdns_name_t structure
  *         FQDN is in format: [hostname.|[instance.]_service._proto.]local.
@@ -175,6 +182,11 @@ static const char * _mdns_get_service_instance_name(mdns_service_t * service)
  */
 static const uint8_t * _mdns_read_fqdn(const uint8_t * packet, const uint8_t * start, mdns_name_t * name, char * buf)
 {
+    static int depth = 0;
+    if (++depth > MDNS_MAX_FQDN_DEPTH) {
+        depth--;
+        return NULL;
+    }
     size_t index = 0;
     while (start[index]) {
         if (name->parts == 4) {
@@ -184,6 +196,7 @@ static const uint8_t * _mdns_read_fqdn(const uint8_t * packet, const uint8_t * s
         if (len < 0xC0) {
             if (len > 63) {
                 //length can not be more than 63
+                depth--;
                 return NULL;
             }
             uint8_t i;
@@ -207,14 +220,18 @@ static const uint8_t * _mdns_read_fqdn(const uint8_t * packet, const uint8_t * s
             size_t address = (((uint16_t)len & 0x3F) << 8) | start[index++];
             if ((packet + address) >= start) {
                 //reference address can not be after where we are
+                depth--;
                 return NULL;
             }
             if (_mdns_read_fqdn(packet, packet + address, name, buf)) {
+                depth--;
                 return start + index;
             }
+            depth--;
             return NULL;
         }
     }
+    depth--;
     return start + index + 1;
 }
 
