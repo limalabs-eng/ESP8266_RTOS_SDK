@@ -1,5 +1,34 @@
 # ESP8266 RTOS Software Development Kit
 
+## Hardware-in-the-loop AI-agent hardening
+
+This fork is a security downstream of Espressif's final ESP8266 RTOS SDK release
+(v3.4, 2021-04-08, EOL upstream). Bugs are found and fixed by **AI agents with
+hardware in the loop**: the agent reads the component, writes a minimal harness,
+flashes a physical ESP8266 NodeMCU, drives the malformed input over the network,
+captures the panic on the 74880-baud console, decodes the faulting PC, patches
+the violated invariant, and re-runs the same PoC together with a benign control
+on the same board.
+
+Nothing in the table is a static-analysis guess: each row has a crash repeat, a
+patched repeat, and the raw serial logs committed in the companion hunt repo,
+[`hil_device_security`](https://github.com/limalabs-eng/hil_device_security)
+(registry `esp8266_rtos_sdk_v3.4/ideas/registry.csv`, evidence under
+`harness/<id>/.runlog/`). Findings are reported upstream where the affected
+release still has a live branch.
+
+### Found and fixed
+
+| id | Component | Defect | Reach | Fix | Verification |
+|---|---|---|---|---|---|
+| protocomm-pb-len | protocomm sec1 | `sec1_session_setup()` dispatches on the protobuf message type but never checks that the matching `oneof` member is present; `sc0`/`sc1` NULL dereference | unauthenticated, one 4-byte `POST /prov-session` | reject with `ESP_ERR_INVALID_ARG` before dereferencing (`fix/protocomm-sec1-oneof-null`) | 2/2 crashes before, 0/2 after, benign 3/3 clean |
+| mdns-name-compress | mDNS | `_mdns_read_fqdn()` recurses per compression pointer with no depth limit; a pointer ladder exhausts the 4 KB task stack into the heap | unauthenticated, one UDP datagram to 5353 | cap recursion at `MDNS_MAX_FQDN_DEPTH` (48), existing skip path (`fix/mdns-fqdn-depth`) | 2/2 panics before, 0/2 after, benign 4/4 still answers |
+| httpd-header-line-oob | esp_http_server | header NUL terminator index can exceed `scratch` by one | unauthenticated HTTP request | clamp the NUL index to the last byte (`hardening/httpd-scratch-terminator`) | latent (padding absorbs it); canary intact, 200 at capacity |
+
+`httpd-header-line-oob` was investigated to a negative result: the one-byte
+overrun lands in struct padding, so it is fixed as an invariant-level hardening
+rather than as a live crash.
+
 [![Documentation Status](https://readthedocs.com/projects/espressif-esp8266-rtos-sdk/badge/?version=latest)](https://docs.espressif.com/projects/esp8266-rtos-sdk/en/latest/?badge=latest)
 
 
