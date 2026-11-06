@@ -24,6 +24,7 @@ release still has a live branch.
 | protocomm-pb-len | protocomm sec1 | `sec1_session_setup()` dispatches on the protobuf message type but never checks that the matching `oneof` member is present; `sc0`/`sc1` NULL dereference | unauthenticated, one 4-byte `POST /prov-session` | reject with `ESP_ERR_INVALID_ARG` before dereferencing (`fix/protocomm-sec1-oneof-null`) | 2/2 crashes before, 0/2 after, benign 3/3 clean |
 | mdns-name-compress | mDNS | `_mdns_read_fqdn()` recurses per compression pointer with no depth limit; a pointer ladder exhausts the 4 KB task stack into the heap | unauthenticated, one UDP datagram to 5353 | cap recursion at `MDNS_MAX_FQDN_DEPTH` (48), existing skip path (`fix/mdns-fqdn-depth`) | 2/2 panics before, 0/2 after, benign 4/4 still answers |
 | httpd-header-line-oob | esp_http_server | header NUL terminator index can exceed `scratch` by one | unauthenticated HTTP request | clamp the NUL index to the last byte (`hardening/httpd-scratch-terminator`) | latent (padding absorbs it); canary intact, 200 at capacity |
+| lwip-dhcp-opt-len | lwIP DHCP server | option walker reads the length byte and payload past the frame end | unauthenticated SoftAP UDP/67 | `fix/lwip-dhcp-opt-bounds` | host 4/4 SIGSEGV before, 0/2 after, benign 10/10; device OOB read reached, 0/2 after |
 
 `httpd-header-line-oob` was investigated to a negative result: the one-byte
 overrun lands in struct padding, so it is fixed as an invariant-level hardening
