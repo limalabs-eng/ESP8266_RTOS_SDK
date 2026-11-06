@@ -83,6 +83,11 @@ static esp_err_t handle_session_command1(uint32_t session_id,
     uint8_t check_buf[PUBLIC_KEY_LEN];
     int mbed_err;
 
+    if (!in->sc1) {
+        ESP_LOGE(TAG, "Missing sc1 payload");
+        return ESP_ERR_INVALID_ARG;
+    }
+
     if (cur_session->state != SESSION_STATE_CMD1) {
         ESP_LOGE(TAG, "Invalid state of session %d (expected %d)", SESSION_STATE_CMD1, cur_session->state);
         return ESP_ERR_INVALID_STATE;
@@ -184,6 +189,11 @@ static esp_err_t handle_session_command0(uint32_t session_id,
     Sec1Payload *in = (Sec1Payload *) req->sec1;
     esp_err_t ret;
     int mbed_err;
+
+    if (!in->sc0) {
+        ESP_LOGE(TAG, "Missing sc0 payload");
+        return ESP_ERR_INVALID_ARG;
+    }
 
     if (cur_session->state != SESSION_STATE_CMD0) {
         ESP_LOGE(TAG, "Invalid state of session %d (expected %d)", SESSION_STATE_CMD0, cur_session->state);
